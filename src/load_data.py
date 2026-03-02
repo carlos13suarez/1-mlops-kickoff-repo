@@ -11,6 +11,7 @@ TODO: Any temporary or hardcoded variable or parameter will be imported from con
 from pathlib import Path
 import pandas as pd
 from src.utils import load_csv, save_csv
+import kagglehub
 
 
 def load_raw_data(raw_data_path: Path) -> pd.DataFrame:
@@ -26,48 +27,60 @@ def load_raw_data(raw_data_path: Path) -> pd.DataFrame:
     print(f"[load_data] Attempting to load raw data from {raw_data_path}")  # TODO: replace with logging later
     
     try:
+        # Check if the file already exists locally to avoid redundant downloads
         df = load_csv(raw_data_path)
-        print(f"[load_data] Successfully loaded {len(df)} rows")
+        print(f"[load_data] Successfully loaded {len(df)} rows from local cache")
         return df
     except FileNotFoundError:
         print("=" * 80)
-        print("WARNING: Raw data file not found!")
-        print(f"Expected path: {raw_data_path}")
-        print("Creating a DUMMY DATASET for scaffolding purposes...")
-        print("=" * 80)
-        
+        print(f"WARNING: Raw data file not found at {raw_data_path}. Initializing ingestion...")
+
         # --------------------------------------------------------
         # START STUDENT CODE
         # --------------------------------------------------------
-        # TODO_STUDENT: Replace this dummy dataset with your actual data loading logic
-        # Why: Real datasets have unique schemas, sources, and access patterns
-        # Examples:
-        # 1. Load from database: pd.read_sql(query, connection)
-        # 2. Load from API: pd.DataFrame(requests.get(url).json())
-        # 3. Load from multiple files: pd.concat([pd.read_csv(f) for f in glob('data/*.csv')])
-        #
-        # Optional forcing function (leave commented)
-        # raise NotImplementedError("Student: You must implement this logic to proceed!")
-        #
-        # Placeholder (Remove this after implementing your code):
-        print("Warning: Student has not implemented this section yet")
-        # --------------------------------------------------------
-        # END STUDENT CODE
-        # --------------------------------------------------------
-        
-        # Baseline: Create deterministic dummy data
-        dummy_data = pd.DataFrame({
-            "num_feature": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0],
-            "cat_feature": ["A", "B", "A", "B", "A", "B", "A", "B", "A", "B"],
-            "target": [10.5, 20.3, 15.7, 25.1, 18.9, 28.4, 22.3, 32.1, 26.7, 35.8]
-        })
-        
-        raw_data_path = Path(raw_data_path)
-        raw_data_path.parent.mkdir(parents=True, exist_ok=True)
-        save_csv(dummy_data, raw_data_path)
-        
-        print(f"[load_data] Created dummy CSV at {raw_data_path}")
-        print("[load_data] IMPORTANT: Update your SETTINGS dictionary in main.py to match your real dataset!")
-        print("=" * 80)
-        
-        return dummy_data
+        try:
+            print("Fetching 'yasserh/housing-prices-dataset' via kagglehub...")
+            # Download the latest version
+            download_path = kagglehub.dataset_download("yasserh/housing-prices-dataset")
+            
+            # Locate the specific CSV in the downloaded folder
+            downloaded_file = Path(download_path) / "Housing.csv"
+            df = pd.read_csv(downloaded_file)
+            
+            # Save it to the project's data/raw folder for pipeline consistency
+            save_csv(df, raw_data_path)
+            print(f"Successfully ingested {len(df)} rows into {raw_data_path}")
+            return df
+            
+        except Exception as e:
+            print(f"Failed to ingest from Kaggle: {e}")
+            print("Falling back to dummy baseline to keep pipeline runnable.")
+            # --------------------------------------------------------
+            # END STUDENT CODE
+            # --------------------------------------------------------
+            
+            # Baseline: Create deterministic dummy data matching the Housing schema
+            print("LOUD WARNING: CREATING DUMMY DATASET FOR SCAFFOLDING ONLY. UPDATE SETTINGS.")
+            dummy_data = pd.DataFrame({
+                "area": [2000, 3000, 4000],
+                "bedrooms": [2, 3, 4],
+                "bathrooms": [1, 2, 2],
+                "stories": [1, 2, 2],
+                "mainroad": ["yes", "yes", "no"],
+                "guestroom": ["no", "no", "yes"],
+                "basement": ["no", "yes", "no"],
+                "hotwaterheating": ["no", "no", "no"],
+                "airconditioning": ["yes", "yes", "no"],
+                "parking": [1, 2, 2],
+                "prefarea": ["yes", "no", "no"],
+                "furnishingstatus": ["furnished", "semi-furnished", "unfurnished"],
+                "price": [500000.0, 750000.0, 900000.0]
+            })
+            
+            raw_data_path = Path(raw_data_path)
+            raw_data_path.parent.mkdir(parents=True, exist_ok=True)
+            save_csv(dummy_data, raw_data_path)
+            print(f"[load_data] Created dummy CSV at {raw_data_path}")
+            print("=" * 80)
+            
+            return dummy_data

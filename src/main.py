@@ -29,22 +29,56 @@ from src.utils import save_csv, save_model, load_model
 # you MUST update these settings to match your actual columns and problem type!
 
 SETTINGS = {
-    "is_example_config": True,  # Set to False after updating for your dataset
-    "raw_data_path": "data/raw/dataset.csv",
-    "processed_data_path": "data/processed/clean.csv",
+    # File Paths
+    "raw_data_path": "data/raw/housing_raw.csv",
+    "processed_data_path": "data/processed/housing_clean.csv",
     "model_path": "models/model.joblib",
     "predictions_path": "reports/predictions.csv",
-    "target_column": "target",
-    "problem_type": "regression",  # Options: "regression" or "classification"
-    "test_size": 0.2,
-    "random_state": 42,
+    
+    # Dataset Schema
+    "target_column": "price",  # The column we want to predict
+    "problem_type": "regression",  # Changed from classification
+    
+    # Feature Engineering Groups
     "features": {
-        "quantile_bin": [],  # Example: ["age", "income"] - numeric columns to bin
-        "categorical_onehot": ["cat_feature"],  # Example: ["city", "category"]
-        "numeric_passthrough": ["num_feature"],  # Example: ["price", "quantity"]
-        "n_bins": 3
-    }
+        "numeric_passthrough": ["bedrooms", "bathrooms", "stories", "parking"],
+        "quantile_bin": ["area"],  # As discussed in your notebook for right-skewness
+        "categorical_onehot": [
+            "mainroad", 
+            "guestroom", 
+            "basement", 
+            "hotwaterheating", 
+            "airconditioning", 
+            "prefarea", 
+            "furnishingstatus"
+        ],
+        "n_bins": 3  # Example number of bins for quantile binning, can be tuned later
+    },
+    
+    # Model Hyperparameters
+    "alpha": 1.0,  # Example parameter for a Ridge or Lasso regression
+    "random_state": 42,
+    "test_size": 0.2 # Hardcoded for now, check if it should be removed later
 }
+
+
+# SETTINGS = {
+#     "is_example_config": True,  # Set to False after updating for your dataset
+#     "raw_data_path": "data/raw/dataset.csv",
+#     "processed_data_path": "data/processed/clean.csv",
+#     "model_path": "models/model.joblib",
+#     "predictions_path": "reports/predictions.csv",
+#     "target_column": "target",
+#     "problem_type": "regression",  # Options: "regression" or "classification"
+#     "test_size": 0.2,
+#     "random_state": 42,
+#     "features": {
+#         "quantile_bin": [],  # Example: ["age", "income"] - numeric columns to bin
+#         "categorical_onehot": ["cat_feature"],  # Example: ["city", "category"]
+#         "numeric_passthrough": ["num_feature"],  # Example: ["price", "quantity"]
+#         "n_bins": 3
+#     }
+# }
 
 
 def main():
@@ -76,15 +110,15 @@ def main():
     Path("reports").mkdir(parents=True, exist_ok=True)
     
     # --------------------------------------------------------
-    # STEP 2: Configuration validation
+    # STEP 2: Validating configuration
     # --------------------------------------------------------
     print("\n[main] Step 2: Validating configuration")
-    if SETTINGS["is_example_config"]:
-        print("=" * 80)
-        print("WARNING: You are using the EXAMPLE configuration!")
-        print("This is pre-configured to work with the dummy dataset.")
-        print("When you paste your real data, you MUST update SETTINGS to match your dataset schema!")
-        print("=" * 80)
+    # Checking that required file paths are defined
+    required_keys = ["raw_data_path", "processed_data_path", "target_column"]
+    for key in required_keys:
+        if key not in SETTINGS:
+            raise KeyError(f"MISSING CONFIGURATION: {key} must be defined in SETTINGS")
+    print("Configuration validated for Housing Dataset.")
     
     # --------------------------------------------------------
     # STEP 3: Load raw data
