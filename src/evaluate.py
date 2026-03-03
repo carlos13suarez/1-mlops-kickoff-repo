@@ -10,15 +10,15 @@ TODO: Any temporary or hardcoded variable or parameter will be imported from con
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import mean_squared_error, f1_score
+from sklearn import metrics
 
 
-def evaluate_model(model, X_test: pd.DataFrame, y_test: pd.Series, problem_type: str) -> float:
+def evaluate_model(model, X: pd.DataFrame, y: pd.Series, problem_type: str) -> float:
     """
     Inputs:
     - model: FITTED Pipeline from train.py
-    - X_test: Test features (DataFrame)
-    - y_test: Test target (Series)
+    - X: Features (DataFrame)
+    - y: Target (Series)
     - problem_type: "regression" or "classification"
     Outputs:
     - metric: Single float (RMSE for regression, F1 for classification)
@@ -27,52 +27,29 @@ def evaluate_model(model, X_test: pd.DataFrame, y_test: pd.Series, problem_type:
     - Explicit problem_type ensures correct metric is used when models are swapped
     - Returning float enables automated model comparison and rollback decisions
     """
-    print(f"[evaluate] Evaluating {problem_type} model on {len(X_test)} samples")  # TODO: replace with logging later
+    print(f"[evaluate] Evaluating {problem_type} model on {len(X)} samples")  # TODO: replace with logging later
     
-    # Generate predictions using the full Pipeline (preprocess + predict)
-    y_pred = model.predict(X_test)
+    # 1. Generate predictions (these will be in log space because of our train.py logic)
+    y_pred_log = model.predict(X)
+    
+    # 2. Inverse transform to get actual dollar prices
+    y_pred = np.expm1(y_pred_log)
     
     # --------------------------------------------------------
-    # START STUDENT CODE
+    # START STUDENT CODE: Evaluation Metrics
     # --------------------------------------------------------
-    # TODO_STUDENT: Customize evaluation metrics to match your business objective
-    # Why: Different problems require different metrics (precision vs recall, MAE vs RMSE, custom business metrics)
-    # Examples:
-    # 1. Regression alternatives:
-    #    from sklearn.metrics import mean_absolute_error, r2_score
-    #    metric = mean_absolute_error(y_test, y_pred)
-    # 2. Classification alternatives:
-    #    from sklearn.metrics import precision_score, recall_score, roc_auc_score
-    #    metric = roc_auc_score(y_test, y_pred)
-    # 3. Multi-metric evaluation:
-    #    metrics = {
-    #        'rmse': mean_squared_error(y_test, y_pred, squared=False),
-    #        'mae': mean_absolute_error(y_test, y_pred),
-    #        'r2': r2_score(y_test, y_pred)
-    #    }
-    #    print(f"Metrics: {metrics}")
-    # 4. Custom business metric:
-    #    def business_cost(y_true, y_pred):
-    #        # False positives cost $100, false negatives cost $500
-    #        return custom_logic(y_true, y_pred)
-    #
-    # Optional forcing function (leave commented)
-    # raise NotImplementedError("Student: You must implement this logic to proceed!")
-    #
-    # Placeholder (Remove this after implementing your code):
-    print("Warning: Student has not implemented this section yet")
+    # We compute the metrics from your notebook to show in the logs
+    mae = metrics.mean_absolute_error(y, y_pred)
+    r2 = metrics.r2_score(y, y_pred)
+    rmse = np.sqrt(metrics.mean_squared_error(y, y_pred))
+    
+    print(f"  - R-squared: {r2:.4f}")
+    print(f"  - Mean Absolute Error: ${mae:,.2f}")
+    print(f"  - Root Mean Squared Error: ${rmse:,.2f}")
+
     # --------------------------------------------------------
     # END STUDENT CODE
     # --------------------------------------------------------
     
-    # Baseline metric computation
-    if problem_type == "regression":
-        metric = np.sqrt(mean_squared_error(y_test, y_pred))  # RMSE
-        print(f"[evaluate] RMSE: {metric:.4f}")
-    elif problem_type == "classification":
-        metric = f1_score(y_test, y_pred, average='weighted')  # Weighted F1 (handles multiclass)
-        print(f"[evaluate] F1 Score (weighted): {metric:.4f}")
-    else:
-        raise ValueError(f"Unsupported problem_type: {problem_type}")
-    
-    return metric
+    # Return the primary metric for the pipeline's records
+    return float(rmse)
