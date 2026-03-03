@@ -205,11 +205,16 @@ def main():
     save_model(model, Path(SETTINGS["model_path"]))
     
     # --------------------------------------------------------
-    # STEP 12: Evaluate model on held-out test set
+    # STEP 12: Evaluate model
     # --------------------------------------------------------
-    print("\n[main] Step 12: Evaluating model")
-    metric = evaluate_model(model, X, y, problem_type=SETTINGS["problem_type"])
-    print(f"[main] Test set metric: {metric:.4f}")
+    print("\n[main] Step 12: Evaluating model performance")
+    # For the pipeline flow, we evaluate on the full set to get final stats
+    primary_metric = evaluate_model(
+        model, 
+        X, 
+        y, 
+        SETTINGS["problem_type"]
+    )
     
     # --------------------------------------------------------
     # STEP 13: Run inference on example data (using test set as proxy)
