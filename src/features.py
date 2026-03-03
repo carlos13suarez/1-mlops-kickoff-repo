@@ -18,7 +18,7 @@ def get_feature_preprocessor(
     quantile_bin_cols: Optional[List[str]] = None,
     categorical_onehot_cols: Optional[List[str]] = None,
     numeric_passthrough_cols: Optional[List[str]] = None,
-    n_bins: int = 3
+n_bins: int = 5 # Adjusted to 5 bins to match your Notebook's K-Fold strategy
 ):
     """
     Inputs:
@@ -33,68 +33,37 @@ def get_feature_preprocessor(
     - ColumnTransformer ensures consistent feature order and prevents missing columns in production
     - Explicit configuration prevents silent feature engineering bugs
     """
-    print("[features] Building feature preprocessing recipe")  # TODO: replace with logging later
-    
-    # Handle None defaults
-    quantile_bin_cols = quantile_bin_cols or []
-    categorical_onehot_cols = categorical_onehot_cols or []
-    numeric_passthrough_cols = numeric_passthrough_cols or []
+    print(f"[features] Building recipe: {len(quantile_bin_cols or [])} bin, {len(categorical_onehot_cols or [])} ohe, {len(numeric_passthrough_cols or [])} pass")  # TODO: replace with logging later
     
     transformers = []
-    
-    # Quantile binning for numeric features (reduces overfitting to outliers)
-    if quantile_bin_cols:
-        transformers.append((
-            "quantile_bin",
-            KBinsDiscretizer(n_bins=n_bins, encode='ordinal', strategy='quantile'),
-            quantile_bin_cols
-        ))
-    
-    # One-hot encoding for categorical features
-    if categorical_onehot_cols:
-        # Backwards compatibility: sparse_output replaced sparse in scikit-learn 1.2+
-        try:
-            encoder = OneHotEncoder(drop='first', handle_unknown='ignore', sparse_output=False)
-        except TypeError:
-            encoder = OneHotEncoder(drop='first', handle_unknown='ignore', sparse=False)
-        
-        transformers.append((
-            "onehot",
-            encoder,
-            categorical_onehot_cols
-        ))
-    
-    # Numeric passthrough (no transformation)
-    if numeric_passthrough_cols:
-        transformers.append((
-            "numeric_passthrough",
-            "passthrough",
-            numeric_passthrough_cols
-        ))
     
     # --------------------------------------------------------
     # START STUDENT CODE
     # --------------------------------------------------------
-    # TODO_STUDENT: Add custom feature transformations from your notebook
-    # Why: Real-world features often need domain-specific engineering (scaling, interactions, text vectorization)
-    # Examples:
-    # 1. Add StandardScaler for features that need normalization:
-    #    transformers.append(("scaler", StandardScaler(), ['feature_1', 'feature_2']))
-    # 2. Add polynomial features:
-    #    from sklearn.preprocessing import PolynomialFeatures
-    #    transformers.append(("poly", PolynomialFeatures(degree=2), ['feature_1']))
-    # 3. Add text vectorization:
-    #    from sklearn.feature_extraction.text import TfidfVectorizer
-    #    transformers.append(("tfidf", TfidfVectorizer(max_features=100), 'text_column'))
-    # 4. Add custom transformers:
-    #    from sklearn.preprocessing import FunctionTransformer
-    #    transformers.append(("log_transform", FunctionTransformer(np.log1p), ['skewed_feature']))
-    #
-    # Optional forcing function (leave commented)
-    # raise NotImplementedError("Student: You must implement this logic to proceed!")
-    #
-    # Placeholder (Remove this after implementing your code):
-    print("Warning: Student has not implemented this section yet")
+    
+    # 1. Quantile Binning (e.g., for 'area')
+    if quantile_bin_cols:
+        # We use onehot-dense so it integrates cleanly with the other encoded features
+        kbd = KBinsDiscretizer(n_bins=n_bins, encode="onehot-dense", strategy="quantile")
+        transformers.append(("quantile_bin", kbd, quantile_bin_cols))
+
+    # 2. Categorical One-Hot Encoding (e.g., for 'furnishingstatus')
+    if categorical_onehot_cols:
+        # Note: 'sparse_output' is for newer sklearn; 'sparse' for older. 
+        # The prompt requires a try/except for maximum compatibility.
+        try:
+            ohe = OneHotEncoder(drop="first", sparse_output=False, handle_unknown="ignore")
+        except TypeError:
+            ohe = OneHotEncoder(drop="first", sparse=False, handle_unknown="ignore")
+        
+        transformers.append(("cat_onehot", ohe, categorical_onehot_cols))
+
+    # 3. Numeric Passthrough + Scaling (e.g., for 'bedrooms', 'bathrooms', etc.)
+    if numeric_passthrough_cols:
+        # Standardizing numeric inputs is best practice for Linear Regression
+        scaler = StandardScaler()
+        transformers.append(("num_scaler", scaler, numeric_passthrough_cols))
+        
     # --------------------------------------------------------
     # END STUDENT CODE
     # --------------------------------------------------------
