@@ -31,28 +31,33 @@ def validate_dataframe(df: pd.DataFrame, required_columns: list) -> bool:
     # --------------------------------------------------------
     # START STUDENT CODE
     # --------------------------------------------------------
-    # TODO_STUDENT: Add dataset-specific validation checks
-    # Why: Production pipelines must enforce business rules and data contracts
-    # Examples:
-    # 1. Check required columns exist:
-    #    missing = set(required_columns) - set(df.columns)
-    #    if missing:
-    #        raise ValueError(f"Missing columns: {missing}")
-    # 2. Check value ranges:
-    #    if (df['age'] < 0).any():
-    #        raise ValueError("Age cannot be negative")
-    # 3. Check data types:
-    #    if df['price'].dtype not in ['int64', 'float64']:
-    #        raise ValueError("Price must be numeric")
-    # 4. Check for excessive missingness:
-    #    if df.isnull().sum().sum() / df.size > 0.5:
-    #        raise ValueError("More than 50% missing values")
-    #
-    # Optional forcing function (leave commented)
-    # raise NotImplementedError("Student: You must implement this logic to proceed!")
-    #
-    # Placeholder (Remove this after implementing your code):
-    print("Warning: Student has not implemented this section yet")
+
+    # 1. Check required columns exist
+    missing = [col for col in required_columns if col not in df.columns]
+    if missing:
+        raise ValueError(f"[validate] VALIDATION FAILED: Missing required columns: {missing}")
+
+    # 2. Check for Nulls in critical columns
+    # We check the entire set of required columns for any NaN values
+    null_counts = df[required_columns].isnull().sum()
+    cols_with_nulls = null_counts[null_counts > 0].index.tolist()
+    
+    if cols_with_nulls:
+        raise ValueError(f"[validate] VALIDATION FAILED: The following columns contain null values: {cols_with_nulls}")
+
+    # 3. Check data types for Numeric features
+    # Since we are doing Regression, we expect the target and area to be numeric
+    # This prevents the ColumnTransformer from failing later
+    numeric_columns = [
+        "price", "area", "bedrooms", 
+        "bathrooms", "stories", "parking"
+    ]
+    
+    for col in numeric_columns:
+        if col in df.columns:
+            if not pd.api.types.is_numeric_dtype(df[col]):
+                raise ValueError(f"[validate] VALIDATION FAILED: Column '{col}' must be numeric (found {df[col].dtype}).")
+        
     # --------------------------------------------------------
     # END STUDENT CODE
     # --------------------------------------------------------
