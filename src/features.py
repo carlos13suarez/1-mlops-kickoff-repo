@@ -44,7 +44,12 @@ n_bins: int = 5 # Adjusted to 5 bins to match your Notebook's K-Fold strategy
     # 1. Quantile Binning (e.g., for 'area')
     if quantile_bin_cols:
         # We use onehot-dense so it integrates cleanly with the other encoded features
-        kbd = KBinsDiscretizer(n_bins=n_bins, encode="onehot-dense", strategy="quantile")
+        kbd = KBinsDiscretizer(
+            n_bins=n_bins, 
+            encode="onehot-dense", 
+            strategy="quantile",
+            quantile_method='averaged_inverted_cdf'
+        )
         transformers.append(("quantile_bin", kbd, quantile_bin_cols))
 
     # 2. Categorical One-Hot Encoding (e.g., for 'furnishingstatus')

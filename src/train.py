@@ -9,11 +9,14 @@ TODO: Any temporary or hardcoded variable or parameter will be imported from con
 """
 
 import pandas as pd
+import numpy as np
 from sklearn.pipeline import Pipeline
-from sklearn.linear_model import Ridge, LogisticRegression
+from sklearn.linear_model import LinearRegression, Ridge
+from sklearn.model_selection import KFold
+from sklearn import metrics
 
 
-def train_model(X_train: pd.DataFrame, y_train: pd.Series, preprocessor, problem_type: str):
+def train_model(X: pd.DataFrame, y: pd.Series, preprocessor, problem_type: str):
     """
     Inputs:
     - X_train: Training features (DataFrame)
@@ -27,49 +30,55 @@ def train_model(X_train: pd.DataFrame, y_train: pd.Series, preprocessor, problem
     - Serializing the full Pipeline guarantees production predictions match training transformations
     - Explicit problem_type parameter makes model selection auditable and testable
     """
-    print(f"[train] Training {problem_type} model on {len(X_train)} samples")  # TODO: replace with logging later
+    print(f"[train] Starting K-Fold CV (5 folds) for {problem_type}")  # TODO: replace with logging later
     
     # --------------------------------------------------------
     # START STUDENT CODE
     # --------------------------------------------------------
-    # TODO_STUDENT: Replace baseline model with your notebook's tuned model
-    # Why: Model selection and hyperparameters vary by dataset and business requirements
-    # Examples:
-    # 1. Regression with hyperparameters:
-    #    from sklearn.ensemble import RandomForestRegressor
-    #    estimator = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42)
-    # 2. Classification with hyperparameters:
-    #    from sklearn.ensemble import GradientBoostingClassifier
-    #    estimator = GradientBoostingClassifier(n_estimators=100, learning_rate=0.1, random_state=42)
-    # 3. Add hyperparameter tuning:
-    #    from sklearn.model_selection import GridSearchCV
-    #    estimator = GridSearchCV(Ridge(), param_grid={'alpha': [0.1, 1.0, 10.0]}, cv=5)
-    #
-    # Optional forcing function (leave commented)
-    # raise NotImplementedError("Student: You must implement this logic to proceed!")
-    #
-    # Placeholder (Remove this after implementing your code):
-    print("Warning: Student has not implemented this section yet")
+    
+    # 1. Setup K-Fold
+    kf = KFold(n_splits=5, shuffle=True, random_state=42)
+    rmse_scores = []
+
+    # We iterate through folds to validate stability before final fit
+    for fold, (train_idx, val_idx) in enumerate(kf.split(X), 1):
+        X_train_fold, X_val_fold = X.iloc[train_idx], X.iloc[val_idx]
+        y_train_fold, y_val_fold = y.iloc[train_idx], y.iloc[val_idx]
+
+        # Define the estimator (Model 5 used LinearRegression)
+        estimator = LinearRegression()
+
+        # Build the Pipeline for this fold
+        fold_pipeline = Pipeline(steps=[
+            ("preprocess", preprocessor),
+            ("model", estimator)
+        ])
+
+        # Fit on log-transformed target (as per notebook logic)
+        fold_pipeline.fit(X_train_fold, np.log1p(y_train_fold))
+
+        # Predict and inverse transform
+        y_pred = np.expm1(fold_pipeline.predict(X_val_fold))
+        
+        # Track RMSE for this fold
+        rmse = np.sqrt(metrics.mean_squared_error(y_val_fold, y_pred))
+        rmse_scores.append(rmse)
+        print(f"  - Fold {fold} RMSE: {rmse:.2f}")
+
+    print(f"[train] Average CV RMSE: {np.mean(rmse_scores):.2f}")
+
+    # 2. Final Fit
+    # After CV, we train on the ENTIRE dataset to produce the final production model
+    final_pipeline = Pipeline(steps=[
+        ("preprocess", preprocessor),
+        ("model", LinearRegression())
+    ])
+    
+    # We fit on the full data using the log transform
+    final_pipeline.fit(X, np.log1p(y))
+
     # --------------------------------------------------------
     # END STUDENT CODE
     # --------------------------------------------------------
-    
-    # Baseline model selection
-    if problem_type == "regression":
-        estimator = Ridge()
-    elif problem_type == "classification":
-        estimator = LogisticRegression(max_iter=500)
-    else:
-        raise ValueError(f"Unsupported problem_type: {problem_type}")
-    
-    # Build Pipeline: preprocessor + model
-    pipeline = Pipeline(steps=[
-        ("preprocess", preprocessor),
-        ("model", estimator)
-    ])
-    
-    # Fit pipeline (preprocessor.fit_transform + model.fit happen internally)
-    pipeline.fit(X_train, y_train)
-    
-    print(f"[train] Training complete")
-    return pipeline
+
+    return final_pipeline

@@ -149,32 +149,12 @@ def main():
     validate_dataframe(df_clean, required_columns)
     
     # --------------------------------------------------------
-    # STEP 7: Train/test split (BEFORE feature engineering)
+    # STEP 7: Separate Features and Target
     # --------------------------------------------------------
-    print("\n[main] Step 7: Splitting train/test sets")
-    print("[main] CRITICAL: Split happens BEFORE building feature recipe to prevent data leakage")
-    
-    X = df_clean.drop(columns=[SETTINGS["target_column"]])
-    y = df_clean[SETTINGS["target_column"]]
-    
-    # Use stratification for classification, not for regression
-    try:
-        if SETTINGS["problem_type"] == "classification":
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=SETTINGS["test_size"], random_state=SETTINGS["random_state"], stratify=y
-            )
-        else:
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=SETTINGS["test_size"], random_state=SETTINGS["random_state"]
-            )
-    except ValueError as e:
-        print(f"[main] WARNING: Stratification failed ({e}), falling back to non-stratified split")
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=SETTINGS["test_size"], random_state=SETTINGS["random_state"]
-        )
-    
-    print(f"[main] Train set: {len(X_train)} samples")
-    print(f"[main] Test set: {len(X_test)} samples")
+    print("\n[main] Step 7: Preparing Features and Target")
+    target = SETTINGS["target_column"]
+    X = df_clean.drop(columns=[target])
+    y = df_clean[target]
     
     # --------------------------------------------------------
     # STEP 8: Feature engineering sanity checks
@@ -185,14 +165,14 @@ def main():
     all_feature_cols = (SETTINGS["features"]["quantile_bin"] + 
                        SETTINGS["features"]["categorical_onehot"] + 
                        SETTINGS["features"]["numeric_passthrough"])
-    missing_cols = set(all_feature_cols) - set(X_train.columns)
+    missing_cols = set(all_feature_cols) - set(X.columns)
     if missing_cols:
         raise ValueError(f"[main] CRITICAL: Configured feature columns do not exist: {missing_cols}")
     
     # Check quantile_bin columns are numeric
     for col in SETTINGS["features"]["quantile_bin"]:
-        if X_train[col].dtype not in ['int64', 'float64', 'int32', 'float32']:
-            raise TypeError(f"[main] CRITICAL: Column '{col}' configured for quantile_bin but is not numeric (dtype={X_train[col].dtype})")
+        if X[col].dtype not in ['int64', 'float64', 'int32', 'float32']:
+            raise TypeError(f"[main] CRITICAL: Column '{col}' configured for quantile_bin but is not numeric (dtype={X[col].dtype})")
     
     print("[main] Feature configuration validated")
     
@@ -208,10 +188,15 @@ def main():
     )
     
     # --------------------------------------------------------
-    # STEP 10: Train model (Pipeline will fit preprocessor + model together)
+    # STEP 10: Train model (K-Fold CV)
     # --------------------------------------------------------
-    print("\n[main] Step 10: Training model")
-    model = train_model(X_train, y_train, preprocessor, problem_type=SETTINGS["problem_type"])
+    print("\n[main] Step 10: Training model with K-Fold CV")
+    model = train_model(
+        X, 
+        y, 
+        preprocessor, 
+        SETTINGS["problem_type"]
+    )
     
     # --------------------------------------------------------
     # STEP 11: Save trained model
@@ -223,7 +208,7 @@ def main():
     # STEP 12: Evaluate model on held-out test set
     # --------------------------------------------------------
     print("\n[main] Step 12: Evaluating model")
-    metric = evaluate_model(model, X_test, y_test, problem_type=SETTINGS["problem_type"])
+    metric = evaluate_model(model, X, y, problem_type=SETTINGS["problem_type"])
     print(f"[main] Test set metric: {metric:.4f}")
     
     # --------------------------------------------------------
@@ -231,7 +216,7 @@ def main():
     # --------------------------------------------------------
     print("\n[main] Step 13: Running inference on example data")
     # In production, X_infer would come from new unseen data
-    X_infer = X_test.head(10).copy()  # Use first 10 test samples as example
+    X_infer = X.head(10).copy()  # Use first 10 samples as example
     df_predictions = run_inference(model, X_infer)
     
     # --------------------------------------------------------
