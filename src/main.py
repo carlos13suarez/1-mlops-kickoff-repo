@@ -212,7 +212,7 @@ def main():
     print(f"[main] Test set metric: {metric:.4f}")
     
     # --------------------------------------------------------
-    # STEP 13: Run inference on example data (using test set as proxy)
+    # STEP 13: Run inference on example data
     # --------------------------------------------------------
     print("\n[main] Step 13: Running inference on example data")
     # In production, X_infer would come from new unseen data
@@ -235,12 +235,6 @@ def main():
     print(f"  - Processed data: {SETTINGS['processed_data_path']}")
     print(f"  - Trained model:  {SETTINGS['model_path']}")
     print(f"  - Predictions:    {SETTINGS['predictions_path']}")
-    print("\nNext steps:")
-    print("  1. Verify artifacts exist and contain expected data")
-    print("  2. Replace dummy dataset with your real data")
-    print("  3. Update SETTINGS dictionary to match your dataset schema")
-    print("  4. Paste your notebook logic into TODO_STUDENT blocks")
-    print("=" * 80)
 
 
 if __name__ == "__main__":
