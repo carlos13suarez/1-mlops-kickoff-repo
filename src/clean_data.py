@@ -9,13 +9,14 @@ TODO: Any temporary or hardcoded variable or parameter will be imported from con
 """
 
 import pandas as pd
+import numpy as np
 
 
 def clean_dataframe(df_raw: pd.DataFrame, target_column: str) -> pd.DataFrame:
     """
     Inputs:
     - df_raw: Raw DataFrame from load_data module
-    - target_column: Name of the target variable (needed for target-specific cleaning)
+    - target_column: price
     Outputs:
     - df_clean: Cleaned DataFrame (imputed, filtered, deduplicated)
     Why this contract matters for reliable ML delivery:
@@ -24,26 +25,55 @@ def clean_dataframe(df_raw: pd.DataFrame, target_column: str) -> pd.DataFrame:
     """
     print(f"[clean_data] Cleaning {len(df_raw)} rows")  # TODO: replace with logging later
     
-    # Baseline: Safe copy (identity transformation)
+    # 1. Defensive Copy
+    # Always work on a copy to avoid modifying the original 'raw' dataframe in memory
     df_clean = df_raw.copy()
     
     # --------------------------------------------------------
     # START STUDENT CODE
     # --------------------------------------------------------
-    # TODO_STUDENT: Paste your notebook's data cleaning logic here
-    # Why: Every dataset has unique quality issues that require domain-specific cleaning
-    # Examples:
-    # 1. df_clean = df_clean.dropna(subset=[target_column])
-    # 2. df_clean = df_clean[df_clean['age'] > 0]
-    # 3. df_clean['price'] = df_clean['price'].fillna(df_clean['price'].median())
-    # 4. df_clean = df_clean.drop_duplicates()
-    # 5. df_clean = df_clean[df_clean['date'] >= '2020-01-01']
-    #
-    # Optional forcing function (leave commented)
-    # raise NotImplementedError("Student: You must implement this logic to proceed!")
-    #
-    # Placeholder (Remove this after implementing your code):
-    print("Warning: Student has not implemented this section yet")
+    
+    # 2. Deduplication (Uniqueness)
+    # Duplicate rows can lead to over-optimistic model performance if they appear in both train/test
+    initial_count = len(df_clean)
+    df_clean = df_clean.drop_duplicates()
+    if len(df_clean) < initial_count:
+        print(f"[clean_data] Dropped {initial_count - len(df_clean)} duplicate rows")
+
+    # 3. Handling Missing Values (Completeness)
+    # Most ML models (like Linear Regression) cannot handle NaN/Null values
+    # We drop rows where the 'target' is missing because we can't learn from them
+    if target_column in df_clean.columns:
+        df_clean = df_clean.dropna(subset=[target_column])
+    
+    # For other features, we drop rows that are completely empty
+    df_clean = df_clean.dropna(how='all')
+
+    # 4. Binary Encoding (Format Standardization)
+    # Converting human-readable strings to machine-readable integers
+    binary_cols = [
+        "mainroad", "guestroom", "basement", 
+        "hotwaterheating", "airconditioning", "prefarea"
+    ]
+    existing_binary_cols = [col for col in binary_cols if col in df_clean.columns]
+    if existing_binary_cols:
+        print(f"[clean_data] Standardizing binary columns: {existing_binary_cols}")
+        df_clean[existing_binary_cols] = df_clean[existing_binary_cols].replace({"yes": 1, "no": 0})
+
+    # 5. Type Casting
+    # Ensuring numeric columns are actually floats/ints (sometimes Kaggle loads them as objects)
+    numeric_cols = ["area", "bedrooms", "bathrooms", "stories", "parking", "price"]
+    for col in numeric_cols:
+        if col in df_clean.columns:
+            df_clean[col] = pd.to_numeric(df_clean[col], errors='coerce')
+    
+    # 6. Validity Filtering (Domain Logic)
+    # Filtering out data that is physically impossible (e.g., negative prices or 0 area)
+    if "price" in df_clean.columns:
+        df_clean = df_clean[df_clean["price"] > 0]
+    if "area" in df_clean.columns:
+        df_clean = df_clean[df_clean["area"] > 0]
+
     # --------------------------------------------------------
     # END STUDENT CODE
     # --------------------------------------------------------
