@@ -62,25 +62,6 @@ SETTINGS = {
 }
 
 
-# SETTINGS = {
-#     "is_example_config": True,  # Set to False after updating for your dataset
-#     "raw_data_path": "data/raw/dataset.csv",
-#     "processed_data_path": "data/processed/clean.csv",
-#     "model_path": "models/model.joblib",
-#     "predictions_path": "reports/predictions.csv",
-#     "target_column": "target",
-#     "problem_type": "regression",  # Options: "regression" or "classification"
-#     "test_size": 0.2,
-#     "random_state": 42,
-#     "features": {
-#         "quantile_bin": [],  # Example: ["age", "income"] - numeric columns to bin
-#         "categorical_onehot": ["cat_feature"],  # Example: ["city", "category"]
-#         "numeric_passthrough": ["num_feature"],  # Example: ["price", "quantity"]
-#         "n_bins": 3
-#     }
-# }
-
-
 def main():
     """
     Orchestrates the end-to-end ML pipeline.
@@ -149,12 +130,32 @@ def main():
     validate_dataframe(df_clean, required_columns)
     
     # --------------------------------------------------------
-    # STEP 7: Separate Features and Target
+    # STEP 7: Separate Holdouts, Features, and Target
     # --------------------------------------------------------
-    print("\n[main] Step 7: Preparing Features and Target")
+    print("\n[main] Step 7: Slicing Inference Set and Train/Test split")
     target = SETTINGS["target_column"]
-    X = df_clean.drop(columns=[target])
-    y = df_clean[target]
+    
+    # 1. Slice off 50 rows purely for the Step 13 Inference "smoke test"
+    df_infer = df_clean.sample(n=50, random_state=42)
+    df_modeling = df_clean.drop(df_infer.index)
+    
+    # Separate Features for the Inference set (we drop the target because 
+    # real-world inference data doesn't come with the answers!)
+    X_infer = df_infer.drop(columns=[target])
+    
+    # Separate Features and Target for the Modeling set
+    X_modeling = df_modeling.drop(columns=[target])
+    y_modeling = df_modeling[target]
+    
+    # 2. Split the modeling data into 90% Train (for CV) and 10% Test (for final eval)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_modeling, y_modeling, test_size=0.10, random_state=42
+    )
+    
+    print(f"[main] Data split complete!")
+    print(f"       Train shape: {X_train.shape}")
+    print(f"       Test shape:  {X_test.shape}")
+    print(f"       Infer shape: {X_infer.shape}")
     
     # --------------------------------------------------------
     # STEP 8: Feature engineering sanity checks
@@ -165,14 +166,15 @@ def main():
     all_feature_cols = (SETTINGS["features"]["quantile_bin"] + 
                        SETTINGS["features"]["categorical_onehot"] + 
                        SETTINGS["features"]["numeric_passthrough"])
-    missing_cols = set(all_feature_cols) - set(X.columns)
+                       
+    missing_cols = set(all_feature_cols) - set(X_train.columns)
     if missing_cols:
         raise ValueError(f"[main] CRITICAL: Configured feature columns do not exist: {missing_cols}")
     
     # Check quantile_bin columns are numeric
     for col in SETTINGS["features"]["quantile_bin"]:
-        if X[col].dtype not in ['int64', 'float64', 'int32', 'float32']:
-            raise TypeError(f"[main] CRITICAL: Column '{col}' configured for quantile_bin but is not numeric (dtype={X[col].dtype})")
+        if X_train[col].dtype not in ['int64', 'float64', 'int32', 'float32']:
+            raise TypeError(f"[main] CRITICAL: Column '{col}' configured for quantile_bin but is not numeric (dtype={X_train[col].dtype})")
     
     print("[main] Feature configuration validated")
     
@@ -191,9 +193,10 @@ def main():
     # STEP 10: Train model (K-Fold CV)
     # --------------------------------------------------------
     print("\n[main] Step 10: Training model with K-Fold CV")
+    # Feed ONLY the training data here
     model = train_model(
-        X, 
-        y, 
+        X_train, 
+        y_train, 
         preprocessor, 
         SETTINGS["problem_type"]
     )
@@ -208,11 +211,11 @@ def main():
     # STEP 12: Evaluate model
     # --------------------------------------------------------
     print("\n[main] Step 12: Evaluating model performance")
-    # For the pipeline flow, we evaluate on the full set to get final stats
+    # Evaluate ONLY on the unseen 10% test set
     primary_metric = evaluate_model(
         model, 
-        X, 
-        y, 
+        X_test, 
+        y_test, 
         SETTINGS["problem_type"]
     )
     
@@ -220,8 +223,7 @@ def main():
     # STEP 13: Run inference on example data
     # --------------------------------------------------------
     print("\n[main] Step 13: Running inference on example data")
-    # In production, X_infer would come from new unseen data
-    X_infer = X.head(10).copy()  # Use first 10 samples as example
+    # Feed our completely unseen 50-row holdout here
     df_predictions = run_inference(model, X_infer)
     
     # --------------------------------------------------------
